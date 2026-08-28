@@ -1,0 +1,10 @@
+packages: .
+tests: True
+documentation: False
+write-ghc-environment-files: never
+
+package zlib
+  flags: +bundled-c-zlib
+
+package warp
+  flags: -x509
