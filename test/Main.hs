@@ -20,7 +20,7 @@ main = do
       defaultMain
         ( localOption (NumThreads 1) $
             testGroup
-              "hot-swap"
+              "ghc-native-swap"
               [ compilerTests
               , withResource
                   buildRuntimeFixtures

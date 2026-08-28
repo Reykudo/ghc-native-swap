@@ -37,11 +37,11 @@ import Control.Monad
   , void
   , when
   )
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Foldable (traverse_)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List (isInfixOf)
 import Data.Maybe (mapMaybe)
-import HotSwap
+import GHC.NativeSwap
   ( Dynamic
   , HotSwap
   , HotSwapError (..)
@@ -55,16 +55,16 @@ import HotSwap
   , swapHotSwap
   , waitRetirement
   )
-import HotSwap.Polling
+import GHC.NativeSwap.Polling
   ( Candidate (..)
   , PollSettings (..)
   , startPolling
   , stopPolling
   )
+import Numeric (readHex)
 import System.Directory (canonicalizePath)
 import System.Mem (performMajorGC)
 import System.Timeout (timeout)
-import Numeric (readHex)
 
 runNativeChild :: [String] -> IO ()
 runNativeChild arguments =
@@ -421,7 +421,7 @@ pollingScenario versionOne versionTwo = do
         }
       runtime
       "v1"
-      (\revision -> do
+      ( \revision -> do
           alreadySupplied <- readIORef supplied
           if revision == "v1" && not alreadySupplied
             then do
@@ -444,13 +444,13 @@ concurrentScenario artifact = do
   forM_ doneSignals $ \done ->
     void $
       forkFinally
-        (forM_ [1 .. 20_000 :: Int] $ \input -> do
+        ( forM_ [1 .. 20_000 :: Int] $ \input -> do
             let value = if input == 13 then 14 else input
             output <- invoke runtime value
             unless (output == value + 100) $
               recordFailure failures ("invalid concurrent output: " <> show output)
         )
-        (\result -> do
+        ( \result -> do
             case result of
               Left exception -> recordFailure failures (show exception)
               Right () -> pure ()
@@ -475,7 +475,7 @@ stressScenario artifacts@(first : rest) = do
     void $
       forkFinally
         (callerLoop runtime stopping failures (length artifacts))
-        (\result -> do
+        ( \result -> do
             case result of
               Left exception -> recordFailure failures (show exception)
               Right () -> pure ()
@@ -510,7 +510,7 @@ managedStressScenario artifacts@(first : rest) = do
     void $
       forkFinally
         (managedCallerLoop entryRef stopping failures (length artifacts))
-        (\result -> do
+        ( \result -> do
             case result of
               Left exception -> recordFailure failures (show exception)
               Right () -> pure ()
@@ -644,7 +644,7 @@ assertGuarded retired = do
   forM_ retired $ \(Mapping start end _ _) ->
     unless
       ( any
-          (\(Mapping currentStart currentEnd permissions _) ->
+          ( \(Mapping currentStart currentEnd permissions _) ->
               permissions == "---p"
                 && currentStart <= start
                 && currentEnd >= end

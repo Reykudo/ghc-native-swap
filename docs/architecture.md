@@ -4,11 +4,11 @@
 
 The package has two libraries and one executable:
 
-1. `hot-swap` owns native generations, invocation leases, managed function
+1. `ghc-native-swap` owns native generations, invocation leases, managed function
    snapshots, and retirement.
-2. `hot-swap:compiler` builds artifacts, implements the HTTP protocol, and
+2. `ghc-native-swap:compiler` builds artifacts, implements the HTTP protocol, and
    downloads published revisions.
-3. `hot-swap-compiler` runs compilation as a separate web service.
+3. `ghc-native-swap-compiler` runs compilation as a separate web service.
 
 The long-lived runtime stays small: `base`, `deepseq`, `directory`, `ghci`, and
 `stm`. Compiler, JSON, HTTP, and process dependencies stay in the compiler
@@ -22,7 +22,7 @@ may be the strict convenience entry type:
 ```haskell
 module Plugin where
 
-import HotSwap.Plugin (Entry)
+import GHC.NativeSwap.Plugin (Entry)
 
 invoke :: Entry Request Response
 invoke request = ...
@@ -106,7 +106,7 @@ For every immutable generation the service:
 1. writes the submitted module into an isolated staging directory;
 2. builds and runs a small ABI probe importing the actual `invoke` binding;
 3. obtains the GHC `TypeRep` fingerprint for its complete type;
-4. generates `HotSwapGenerated` with a binding and unit ID containing ABI magic
+4. generates `GHCNativeSwapGenerated` with a binding and unit ID containing ABI magic
    and both fingerprint words;
 5. builds a `-dynamic -fPIC -fno-full-laziness -pgma clang -shared
    -fno-link-rts` artifact;
@@ -115,10 +115,10 @@ For every immutable generation the service:
 The generated Haskell-only ABI v4 binding is conceptually:
 
 ```haskell
-module HotSwapGenerated (hotSwapInvokeA<magic>B<fp1>C<fp2>) where
+module GHCNativeSwapGenerated (hotSwapInvokeA<magic>B<fp1>C<fp2>) where
 
 import qualified Company.Rules.Plugin as Plugin
-import HotSwap.Plugin (Export (Export))
+import GHC.NativeSwap.Plugin (Export (Export))
 
 {-# NOINLINE hotSwapInvokeA<magic>B<fp1>C<fp2> #-}
 hotSwapInvokeA<magic>B<fp1>C<fp2> = Export Plugin.invoke

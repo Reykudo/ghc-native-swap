@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module HotSwap.Compiler.Protocol
+module GHC.NativeSwap.Compiler.Protocol
   ( ArtifactManifest (..)
   , CompileRequest (..)
   , ErrorResponse (..)
@@ -16,10 +16,10 @@ import Data.Aeson
   , genericToEncoding
   , genericToJSON
   )
+import Data.Char (toLower)
 import Data.Text (Text)
 import Data.Time (UTCTime)
 import Data.Word (Word64)
-import Data.Char (toLower)
 import GHC.Generics (Generic)
 
 data CompileRequest = CompileRequest

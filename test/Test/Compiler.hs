@@ -5,33 +5,33 @@ module Test.Compiler
   ) where
 
 import Data.Aeson (eitherDecode, encode)
-import qualified Data.ByteString.Lazy as LazyByteString
-import qualified Data.Text as Text
-import HotSwap
+import Data.ByteString.Lazy qualified as LazyByteString
+import Data.Text qualified as Text
+import GHC.NativeSwap
   ( HotSwap
   , closeHotSwap
   , invoke
   , newHotSwap
   )
-import HotSwap.Compiler
+import GHC.NativeSwap.Compiler
   ( CompiledArtifact (compiledPath)
   , compileModule
   , validModuleName
   , validSlot
   )
-import HotSwap.Compiler.Client
+import GHC.NativeSwap.Compiler.Client
   ( newCompilerClient
   , pollCompilerArtifact
   )
-import HotSwap.Compiler.Protocol
+import GHC.NativeSwap.Compiler.Protocol
   ( ArtifactManifest (..)
   , CompileRequest (..)
   )
-import HotSwap.Compiler.Server
+import GHC.NativeSwap.Compiler.Server
   ( ServerConfig (..)
   , compilerApplication
   )
-import HotSwap.Polling (Candidate (..))
+import GHC.NativeSwap.Polling (Candidate (..))
 import Network.HTTP.Client
   ( Manager
   , Request (method, requestBody, requestHeaders)
@@ -84,13 +84,13 @@ testNames = do
   assertBool "hyphenated slot" (validSlot "rules-prod_2")
   assertBool "path traversal slot" (not (validSlot "../rules"))
   assertBool "qualified module" (validModuleName "Company.Rules.Plugin")
-  assertBool "generated module is reserved" (not (validModuleName "HotSwapGenerated"))
+  assertBool "generated module is reserved" (not (validModuleName "GHCNativeSwapGenerated"))
   assertBool "lowercase module" (not (validModuleName "plugin"))
   assertBool "empty segment" (not (validModuleName "Plugin..Rules"))
 
 testHttpFlow :: IO ()
 testHttpFlow =
-  withTemporaryDirectory "hot-swap-http-test" $ \root -> do
+  withTemporaryDirectory "ghc-native-swap-http-test" $ \root -> do
     compiler <- makeTestCompilerConfig (root <> "/artifacts")
     let serverConfig =
           ServerConfig
@@ -132,7 +132,7 @@ testHttpFlow =
 
 testQualifiedResolver :: IO ()
 testQualifiedResolver =
-  withTemporaryDirectory "hot-swap-qualified-test" $ \root -> do
+  withTemporaryDirectory "ghc-native-swap-qualified-test" $ \root -> do
     compiler <- makeTestCompilerConfig (root <> "/artifacts")
     let moduleName = "Company.Zed_Plugin"
         source = Text.replace "module Plugin where" ("module " <> moduleName <> " where") (pluginSource 900)
@@ -151,7 +151,7 @@ testQualifiedResolver =
 
 testRequestLimit :: IO ()
 testRequestLimit =
-  withTemporaryDirectory "hot-swap-http-limit" $ \root -> do
+  withTemporaryDirectory "ghc-native-swap-http-limit" $ \root -> do
     compiler <- makeTestCompilerConfig (root <> "/artifacts")
     let serverConfig =
           ServerConfig

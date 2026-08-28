@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module HotSwap.Plugin
+module GHC.NativeSwap.Plugin
   ( Entry
   , Export (..)
   , abiBindingFor
@@ -14,7 +14,7 @@ module HotSwap.Plugin
 
 import Data.Typeable (Typeable)
 import Data.Word (Word64)
-import HotSwap.Internal.ABI
+import GHC.NativeSwap.Internal.ABI
   ( AbiDescriptor (..)
   , abiMagic
   , descriptorFor
@@ -41,7 +41,7 @@ abiUnitIdFor :: (Word64, Word64, Word64) -> String
 abiUnitIdFor (magic, first, second) =
   generatedUnitIdFor (AbiDescriptor magic first second)
 
-descriptorWordsFor :: forall value. Typeable value => value -> (Word64, Word64, Word64)
+descriptorWordsFor :: forall value. (Typeable value) => value -> (Word64, Word64, Word64)
 descriptorWordsFor _ =
   case descriptorFor @value of
     AbiDescriptor magic first second -> (magic, first, second)

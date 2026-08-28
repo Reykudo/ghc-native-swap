@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module HotSwap.Compiler.Client
+module GHC.NativeSwap.Compiler.Client
   ( CompilerClient
   , CompilerClientError (..)
   , newCompilerClient
@@ -12,14 +12,14 @@ module HotSwap.Compiler.Client
 import Control.Exception (Exception, bracketOnError, throwIO)
 import Control.Monad (unless)
 import Data.Aeson (eitherDecode)
-import qualified Data.ByteString.Lazy as LazyByteString
+import Data.ByteString.Lazy qualified as LazyByteString
 import Data.Char (isAlphaNum, isAscii)
 import Data.Text (Text)
-import qualified Data.Text as Text
+import Data.Text qualified as Text
 import GHC.Generics (Generic)
-import HotSwap.Compiler.Protocol (ArtifactManifest (..))
-import HotSwap.Plugin (abiMagic)
-import HotSwap.Polling (Candidate (..))
+import GHC.NativeSwap.Compiler.Protocol (ArtifactManifest (..))
+import GHC.NativeSwap.Plugin (abiMagic)
+import GHC.NativeSwap.Polling (Candidate (..))
 import Network.HTTP.Client
   ( Manager
   , httpLbs
@@ -34,7 +34,7 @@ import System.Directory
   , removeFile
   , renameFile
   )
-import System.FilePath ((</>), (<.>), takeDirectory)
+import System.FilePath (takeDirectory, (<.>), (</>))
 import System.IO (hClose, openBinaryTempFile)
 
 data CompilerClient = CompilerClient
@@ -122,7 +122,7 @@ downloadArtifact client manifest = do
   let finalPath =
         clientCacheDirectory client
           </> Text.unpack (manifestArtifactId manifest)
-          <.> "so"
+            <.> "so"
   exists <- doesFileExist finalPath
   if exists
     then pure finalPath
@@ -138,9 +138,9 @@ writeAtomically :: FilePath -> LazyByteString.ByteString -> IO ()
 writeAtomically finalPath bytes = do
   let directory = takeDirectory finalPath
   bracketOnError
-    (openBinaryTempFile directory ".hot-swap-download")
+    (openBinaryTempFile directory ".ghc-native-swap-download")
     (\(temporaryPath, handle) -> hClose handle >> removeFile temporaryPath)
-    (\(temporaryPath, handle) -> do
+    ( \(temporaryPath, handle) -> do
         LazyByteString.hPut handle bytes
         hClose handle
         renameFile temporaryPath finalPath

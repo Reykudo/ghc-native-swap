@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module HotSwap
+module GHC.NativeSwap
   ( Dynamic
   , DynamicFunction
   , HotSwap
@@ -55,12 +55,12 @@ import Control.Exception
 import Control.Monad (unless, void)
 import Data.Foldable (traverse_)
 import Data.Typeable (Typeable)
-import qualified Foreign.Concurrent as Concurrent
+import Foreign.Concurrent qualified as Concurrent
 import Foreign.ForeignPtr (ForeignPtr, withForeignPtr)
 import Foreign.Ptr (nullPtr)
-import HotSwap.Error (HotSwapError (..))
-import HotSwap.Internal.ABI (AbiDescriptor, descriptorFor)
-import HotSwap.Internal.Native
+import GHC.NativeSwap.Error (HotSwapError (..))
+import GHC.NativeSwap.Internal.ABI (AbiDescriptor, descriptorFor)
+import GHC.NativeSwap.Internal.Native
   ( Native
   , acquireNativeCall
   , invokeNative
@@ -71,7 +71,7 @@ import HotSwap.Internal.Native
   , runPluginAction
   , unloadNative
   )
-import HotSwap.Plugin (Entry)
+import GHC.NativeSwap.Plugin (Entry)
 import System.Mem (performMajorGC)
 
 data Dynamic value = Dynamic
@@ -95,7 +95,7 @@ newtype Retirement = Retirement (MVar (Either SomeException ()))
 
 newDynamic
   :: forall value
-   . Typeable value
+   . (Typeable value)
   => FilePath
   -> IO (Dynamic value)
 newDynamic artifactPath = do
@@ -119,7 +119,7 @@ newHotSwap
 newHotSwap = newDynamic @(Entry input output)
 
 withDynamic
-  :: Typeable value
+  :: (Typeable value)
   => FilePath
   -> (Dynamic value -> IO result)
   -> IO result
@@ -133,7 +133,7 @@ withHotSwap
 withHotSwap = withDynamic
 
 invoke
-  :: NFData output
+  :: (NFData output)
   => HotSwap input output
   -> input
   -> IO output
@@ -146,17 +146,17 @@ class DynamicFunction function where
     -> function
     -> function
 
-instance NFData output => DynamicFunction (IO output) where
+instance (NFData output) => DynamicFunction (IO output) where
   wrapDynamicFunction path token action =
     withForeignPtr token $ \_ ->
       runPluginAction path (action >>= evaluate . force)
 
-instance DynamicFunction output => DynamicFunction (input -> output) where
+instance (DynamicFunction output) => DynamicFunction (input -> output) where
   wrapDynamicFunction path token function input =
     wrapDynamicFunction path token (function input)
 
 snapshotFunction
-  :: DynamicFunction function
+  :: (DynamicFunction function)
   => Dynamic function
   -> IO function
 snapshotFunction dynamic = mask $ \_ -> do

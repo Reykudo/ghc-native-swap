@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module HotSwap.Compiler.Server
+module GHC.NativeSwap.Compiler.Server
   ( ServerConfig (..)
   , compilerApplication
   ) where
 
+import Control.Concurrent.QSem (QSem, newQSem, signalQSem, waitQSem)
 import Control.Concurrent.STM
   ( TVar
   , atomically
@@ -12,26 +13,25 @@ import Control.Concurrent.STM
   , readTVar
   , writeTVar
   )
-import Control.Concurrent.QSem (QSem, newQSem, signalQSem, waitQSem)
 import Control.Exception (bracket_)
 import Data.Aeson (ToJSON, eitherDecodeStrict', encode)
-import qualified Data.ByteString as ByteString
+import Data.ByteString qualified as ByteString
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict qualified as Map
 import Data.Text (Text)
-import qualified Data.Text as Text
-import HotSwap.Compiler
+import Data.Text qualified as Text
+import GHC.NativeSwap.Compiler
   ( CompileFailure (..)
   , CompiledArtifact (..)
   , CompilerConfig (..)
   , compileModule
   )
-import HotSwap.Compiler.Protocol
+import GHC.NativeSwap.Compiler.Protocol
   ( ArtifactManifest (..)
   , ErrorResponse (..)
   , HealthResponse (..)
   )
-import HotSwap.Plugin (abiMagic)
+import GHC.NativeSwap.Plugin (abiMagic)
 import Network.HTTP.Types
   ( Status
   , hContentType
@@ -49,9 +49,9 @@ import Network.HTTP.Types
   )
 import Network.Wai
   ( Application
-  , getRequestBodyChunk
   , Request
   , Response
+  , getRequestBodyChunk
   , pathInfo
   , requestMethod
   , responseFile
@@ -172,7 +172,7 @@ compileFailureResponse failure =
     ArtifactMissing ->
       errorResponse status500 "artifact_missing" "compiler produced no artifact" Nothing
 
-jsonResponse :: ToJSON value => Status -> value -> Response
+jsonResponse :: (ToJSON value) => Status -> value -> Response
 jsonResponse responseStatus value =
   responseLBS responseStatus [(hContentType, "application/json")] (encode value)
 

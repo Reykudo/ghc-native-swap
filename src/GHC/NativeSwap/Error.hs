@@ -1,4 +1,4 @@
-module HotSwap.Error
+module GHC.NativeSwap.Error
   ( HotSwapError (..)
   ) where
 

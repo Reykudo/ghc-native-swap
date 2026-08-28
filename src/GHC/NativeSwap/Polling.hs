@@ -1,6 +1,6 @@
 {-# LANGUAGE NumericUnderscores #-}
 
-module HotSwap.Polling
+module GHC.NativeSwap.Polling
   ( Candidate (..)
   , PollSettings (..)
   , Poller
@@ -30,7 +30,7 @@ import Control.Exception
   , throwIO
   )
 import Control.Monad (void)
-import HotSwap (HotSwap, swapHotSwap, waitRetirement)
+import GHC.NativeSwap (HotSwap, swapHotSwap, waitRetirement)
 import System.IO (hPutStrLn, stderr)
 
 data Candidate = Candidate
@@ -53,7 +53,7 @@ defaultPollSettings :: PollSettings
 defaultPollSettings =
   PollSettings
     { pollIntervalMicroseconds = 60_000_000
-    , pollErrorHandler = hPutStrLn stderr . ("hot-swap poll failed: " <>) . show
+    , pollErrorHandler = hPutStrLn stderr . ("ghc-native-swap poll failed: " <>) . show
     }
 
 startPolling
@@ -77,7 +77,7 @@ startPolling settings hotSwap initialRevision fetch = do
       Just candidate -> do
         swapped <-
           catchSynchronous
-            (do
+            ( do
                 retirement <- swapHotSwap hotSwap (candidatePath candidate)
                 waitRetirement retirement
                 pure True

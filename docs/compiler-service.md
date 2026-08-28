@@ -9,7 +9,7 @@ The strict convenience shape is:
 ```haskell
 module Company.Rules.Plugin where
 
-import HotSwap.Plugin (Entry)
+import GHC.NativeSwap.Plugin (Entry)
 
 invoke :: Entry Request Response
 invoke = applyRules
@@ -25,8 +25,8 @@ invoke :: Int -> Text -> IO Result
 ```
 
 The module name in JSON must match the source declaration. The configured
-package allowlist must include `base`, `hot-swap`, and every shared API package
-used by request, response, or implementation code. `HotSwapGenerated` is
+package allowlist must include `base`, `ghc-native-swap`, and every shared API package
+used by request, response, or implementation code. `GHCNativeSwapGenerated` is
 reserved for the compiler-created ABI module.
 
 The service first builds an executable probe importing this exact binding. A
@@ -87,15 +87,15 @@ letters, digits, `_`, and `-`.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `HOT_SWAP_BIND` | `127.0.0.1` | Listen address |
-| `HOT_SWAP_PORT` | `8080` | Listen port |
-| `HOT_SWAP_ARTIFACT_DIR` | `./artifacts` | Artifact and staging root |
-| `HOT_SWAP_GHC` | `ghc` | Exact compiler executable |
-| `HOT_SWAP_PACKAGE_DBS` | empty | Comma-separated package DB directories |
-| `HOT_SWAP_PACKAGES` | `base,hot-swap` | Exposed package allowlist |
-| `HOT_SWAP_COMPILE_TIMEOUT_SECONDS` | `60` | Timeout for each compiler/probe process |
-| `HOT_SWAP_MAX_SOURCE_BYTES` | `1048576` | HTTP request body limit |
-| `HOT_SWAP_MAX_CONCURRENT_COMPILATIONS` | `1` | Concurrent request limit |
+| `GHC_NATIVE_SWAP_BIND` | `127.0.0.1` | Listen address |
+| `GHC_NATIVE_SWAP_PORT` | `8080` | Listen port |
+| `GHC_NATIVE_SWAP_ARTIFACT_DIR` | `./artifacts` | Artifact and staging root |
+| `GHC_NATIVE_SWAP_GHC` | `ghc` | Exact compiler executable |
+| `GHC_NATIVE_SWAP_PACKAGE_DBS` | empty | Comma-separated package DB directories |
+| `GHC_NATIVE_SWAP_PACKAGES` | `base,ghc-native-swap` | Exposed package allowlist |
+| `GHC_NATIVE_SWAP_COMPILE_TIMEOUT_SECONDS` | `60` | Timeout for each compiler/probe process |
+| `GHC_NATIVE_SWAP_MAX_SOURCE_BYTES` | `1048576` | HTTP request body limit |
+| `GHC_NATIVE_SWAP_MAX_CONCURRENT_COMPILATIONS` | `1` | Concurrent request limit |
 
 Clients cannot supply GHC flags, output paths, package DBs, or package names.
 The service chooses a fresh immutable artifact path, derives a reserved

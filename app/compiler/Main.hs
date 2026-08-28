@@ -6,9 +6,9 @@ module Main (main) where
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 import Data.String (fromString)
-import qualified Data.Text as Text
-import HotSwap.Compiler (CompilerConfig (..), makeCompilerConfig)
-import HotSwap.Compiler.Server
+import Data.Text qualified as Text
+import GHC.NativeSwap.Compiler (CompilerConfig (..), makeCompilerConfig)
+import GHC.NativeSwap.Compiler.Server
   ( ServerConfig (..)
   , compilerApplication
   )
@@ -23,15 +23,15 @@ import Text.Read (readMaybe)
 
 main :: IO ()
 main = do
-  bind <- environment "HOT_SWAP_BIND" "127.0.0.1"
-  port <- environmentRead "HOT_SWAP_PORT" 8080
-  artifactRoot <- environment "HOT_SWAP_ARTIFACT_DIR" "artifacts"
-  compiler <- environment "HOT_SWAP_GHC" "ghc"
-  packageDatabases <- splitPackages <$> environment "HOT_SWAP_PACKAGE_DBS" ""
-  packages <- splitPackages <$> environment "HOT_SWAP_PACKAGES" "base,hot-swap"
-  timeoutSeconds <- environmentRead "HOT_SWAP_COMPILE_TIMEOUT_SECONDS" 60
-  sourceLimit <- environmentRead "HOT_SWAP_MAX_SOURCE_BYTES" 1_048_576
-  concurrency <- environmentRead "HOT_SWAP_MAX_CONCURRENT_COMPILATIONS" 1
+  bind <- environment "GHC_NATIVE_SWAP_BIND" "127.0.0.1"
+  port <- environmentRead "GHC_NATIVE_SWAP_PORT" 8080
+  artifactRoot <- environment "GHC_NATIVE_SWAP_ARTIFACT_DIR" "artifacts"
+  compiler <- environment "GHC_NATIVE_SWAP_GHC" "ghc"
+  packageDatabases <- splitPackages <$> environment "GHC_NATIVE_SWAP_PACKAGE_DBS" ""
+  packages <- splitPackages <$> environment "GHC_NATIVE_SWAP_PACKAGES" "base,ghc-native-swap"
+  timeoutSeconds <- environmentRead "GHC_NATIVE_SWAP_COMPILE_TIMEOUT_SECONDS" 60
+  sourceLimit <- environmentRead "GHC_NATIVE_SWAP_MAX_SOURCE_BYTES" 1_048_576
+  concurrency <- environmentRead "GHC_NATIVE_SWAP_MAX_CONCURRENT_COMPILATIONS" 1
   compilerConfig <-
     makeCompilerConfig
       compiler
@@ -47,7 +47,7 @@ main = do
         , maxConcurrentCompilations = concurrency
         }
   putStrLn
-    ( "hot-swap-compiler listening on "
+    ( "ghc-native-swap-compiler listening on "
         <> bind
         <> ":"
         <> show port
@@ -63,7 +63,7 @@ main = do
 environment :: String -> String -> IO String
 environment name fallback = fromMaybe fallback <$> lookupEnv name
 
-environmentRead :: Read value => String -> value -> IO value
+environmentRead :: (Read value) => String -> value -> IO value
 environmentRead name fallback = do
   raw <- lookupEnv name
   pure (fromMaybe fallback (raw >>= readMaybe))
@@ -75,7 +75,7 @@ splitOnComma :: String -> [String]
 splitOnComma [] = [""]
 splitOnComma input =
   let (before, after) = break (== ',') input
-   in before : case after of
+  in  before : case after of
         [] -> []
         _ : rest -> splitOnComma rest
 

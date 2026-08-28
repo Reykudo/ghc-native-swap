@@ -1,6 +1,6 @@
-# hot-swap
+# ghc-native-swap
 
-`hot-swap` compiles and loads versioned, Haskell-only native shared objects into
+`ghc-native-swap` compiles and loads versioned, Haskell-only native shared objects into
 one running RTS. Calls cross generations as ordinary Haskell values; there is
 no RPC or runtime serialization layer.
 

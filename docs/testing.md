@@ -67,8 +67,8 @@ Before release:
 ```text
 cabal build all
 cabal test all --test-show-details=direct
-HOT_SWAP_STRESS_GENERATIONS=1000 \
-  cabal test hot-swap-test --test-show-details=direct \
+GHC_NATIVE_SWAP_STRESS_GENERATIONS=1000 \
+  cabal test ghc-native-swap-test --test-show-details=direct \
   --test-options='--pattern "concurrent stress reload"'
 ```
 
@@ -108,7 +108,7 @@ Final managed acceptance on 2026-08-24, same platform:
   seconds;
 - the formerly crashing two-shape lifecycle passes under the debug RTS without
   artificial delays;
-- `HOT_SWAP_STRESS_GENERATIONS=1000 cabal test hot-swap-test
+- `GHC_NATIVE_SWAP_STRESS_GENERATIONS=1000 cabal test ghc-native-swap-test
   --test-show-details=direct --test-options='--pattern "concurrent stress
   reload"'` passes in 584.53 seconds (588.89 seconds including setup):
   strict concurrent swapping, managed snapshot replacement with eight callers,

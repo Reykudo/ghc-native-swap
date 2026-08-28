@@ -6,8 +6,8 @@ module Test.Runtime
   ) where
 
 import Control.Monad (forM)
-import qualified Data.Text as Text
-import HotSwap.Compiler (CompilerConfig)
+import Data.Text qualified as Text
+import GHC.NativeSwap.Compiler (CompilerConfig)
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.Exit (ExitCode (..))
 import System.Process
@@ -128,7 +128,7 @@ runtimeTests getFixtures =
 
 testStress :: IO ()
 testStress =
-  withTemporaryDirectory "hot-swap-stress" $ \root -> do
+  withTemporaryDirectory "ghc-native-swap-stress" $ \root -> do
     generationCount <- stressGenerationCount
     compiler <- makeTestCompilerConfig root
     artifacts <-
@@ -152,7 +152,7 @@ compileStressGeneration compiler generation =
 
 stressGenerationCount :: IO Int
 stressGenerationCount = do
-  configured <- lookupEnv "HOT_SWAP_STRESS_GENERATIONS"
+  configured <- lookupEnv "GHC_NATIVE_SWAP_STRESS_GENERATIONS"
   pure (max 2 (maybe 100 id (configured >>= readMaybe)))
 
 runChild :: Int -> [String] -> IO ()

@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module HotSwap.Internal.ABI
+module GHC.NativeSwap.Internal.ABI
   ( AbiDescriptor (..)
   , abiMagic
   , descriptorFor
@@ -24,9 +24,9 @@ abiMagic :: Word64
 abiMagic = 0x4853574150000004
 
 generatedModuleName :: String
-generatedModuleName = "HotSwapGenerated"
+generatedModuleName = "GHCNativeSwapGenerated"
 
-descriptorFor :: forall value. Typeable value => AbiDescriptor
+descriptorFor :: forall value. (Typeable value) => AbiDescriptor
 descriptorFor =
   case typeRepFingerprint (typeRep (Proxy @value)) of
     Fingerprint first second -> AbiDescriptor abiMagic first second

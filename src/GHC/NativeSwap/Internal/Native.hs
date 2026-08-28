@@ -1,7 +1,7 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module HotSwap.Internal.Native
+module GHC.NativeSwap.Internal.Native
   ( Native
   , acquireNativeCall
   , invokeNative
@@ -40,12 +40,12 @@ import Control.Exception
   )
 import Control.Monad (filterM, unless)
 import Data.Bits ((.|.))
-import Data.Int (Int64)
 import Data.IORef
   ( IORef
   , atomicModifyIORef'
   , newIORef
   )
+import Data.Int (Int64)
 import Data.List (isSuffixOf)
 import Data.Maybe (mapMaybe)
 import Foreign.C.Error
@@ -66,6 +66,12 @@ import Foreign.StablePtr
   , deRefStablePtr
   , freeStablePtr
   )
+import GHC.NativeSwap.Error (HotSwapError (..))
+import GHC.NativeSwap.Internal.ABI
+  ( AbiDescriptor
+  , invokeSymbolFor
+  )
+import GHC.NativeSwap.Plugin (Entry, Export (..))
 import GHCi.Message (LoadedDLL)
 import GHCi.ObjLink
   ( ShouldRetainCAFs (RetainCAFs)
@@ -73,12 +79,6 @@ import GHCi.ObjLink
   , loadDLL
   , lookupSymbolInDLL
   )
-import HotSwap.Error (HotSwapError (..))
-import HotSwap.Internal.ABI
-  ( AbiDescriptor
-  , invokeSymbolFor
-  )
-import HotSwap.Plugin (Entry, Export (..))
 import Numeric (readHex)
 import System.Directory (canonicalizePath)
 import System.IO.Unsafe (unsafePerformIO)
@@ -142,7 +142,7 @@ loadNative expected requestedPath = do
       loadDLL absolutePath >>= either (throwIO . NativeLoadFailed absolutePath) pure
     ranges <- mappedNativeRanges absolutePath
     let cleanup = cleanupHandle handle ranges
-    (do
+    ( do
         closurePointer <-
           requireSymbol absolutePath handle (invokeSymbolFor expected)
         stablePointer <- c_getStablePtr closurePointer
@@ -153,10 +153,11 @@ loadNative expected requestedPath = do
             , nativeValue = stablePointer
             , nativeRanges = ranges
             }
-      ) `onException` cleanup
+      )
+      `onException` cleanup
 
 invokeNative
-  :: NFData output
+  :: (NFData output)
   => Native (Entry input output)
   -> input
   -> IO output
@@ -177,7 +178,8 @@ nativeArtifactPath = nativePath
 runPluginAction :: FilePath -> IO output -> IO output
 runPluginAction path action = mask $ \restore -> do
   outcome <-
-    tryJust synchronousException
+    tryJust
+      synchronousException
       (restore action)
   case outcome of
     Left exception -> do
@@ -317,6 +319,7 @@ synchronousException exception =
 renderException :: SomeException -> IO String
 renderException exception = do
   rendered <-
-    tryJust synchronousException
+    tryJust
+      synchronousException
       (evaluate (force (displayException exception)))
   pure $ either (const "plugin exception could not be rendered") id rendered
