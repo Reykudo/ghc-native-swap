@@ -56,7 +56,7 @@ malicious compiler service that deliberately forges the expected symbol.
 The strict mode remains the conservative default:
 
 ```haskell
-invoke :: NFData output => HotSwap input output -> input -> IO output
+invoke :: UnloadSafe output => HotSwap input output -> input -> IO output
 ```
 
 It leases one generation for one call and never exposes a function value.
@@ -68,9 +68,29 @@ snapshotFunction :: DynamicFunction function => Dynamic function -> IO function
 ```
 
 `DynamicFunction` recursively wraps `argument -> rest` and terminates at
-`NFData result => IO result`. It is still direct shared-heap Haskell invocation;
-no argument or result is serialized and no stable pointer is allocated per
-call.
+`UnloadSafe result => IO result`. It is still direct shared-heap Haskell
+invocation; no argument or result is serialized and no stable pointer is
+allocated per call.
+
+## Unload safety is distinct from normal form
+
+The original boundary used `NFData` directly. Normal-form evaluation is a good
+default proof of detachment, but it is not the invariant itself: a host-owned
+`Data.Dynamic.Dynamic` must remain opaque, while the deprecated shallow
+`NFData (a -> b)` instance must not make function results acceptable.
+
+`UnloadSafe` therefore states the stronger semantic law directly. An
+overlappable instance delegates lawful `NFData` values to `rnf`; structural
+instances recurse through standard containers so they can contain opaque safe
+leaves; and `Dynamic` has a shallow special instance. That special instance is
+lawful only when the host created both its payload and `TypeRep`. Reloadable
+code may transport such a value but must not construct a new `Dynamic`.
+Functions are rejected with a custom type error.
+
+This remains a trusted typeclass law, not a proof derived by GHC. A dishonest
+`NFData` or `UnloadSafe` instance, a mutable cell containing a plugin thunk, or
+a plugin-created `Dynamic` violates the loader contract. The class performs no
+serialization or heap copy.
 
 ## Finalizer-backed wrappers, not raw closures
 
@@ -86,8 +106,8 @@ The accepted design returns only host-owned recursive wrappers. Every wrapper
 needs the same `ForeignPtr` token for its eventual terminal `withForeignPtr`, so
 partial applications retain their generation. The token finalizer merely
 decrements an STM count. A retirement thread performs actual cleanup after the
-count reaches zero. Terminal results are forced to normal form before that
-protection ends.
+count reaches zero. Terminal results satisfy `UnloadSafe` before that protection
+ends.
 
 ## Retired address tombstones
 

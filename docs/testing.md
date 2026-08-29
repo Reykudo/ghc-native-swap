@@ -9,8 +9,9 @@
    an old call is active, cancel callers, propagate plugin failures, reject bad
    magic/types/symbols, poll revisions, close, and inspect mappings.
 4. **Managed lifetime tests** cover zero arguments, multiple arguments, a
-   reachable partial application, terminal `rnf`, IORef replacement, a running
-   call during finalization, and sequential function shapes.
+   reachable partial application, terminal unload-safety evaluation, IORef
+   replacement, a running call during finalization, and sequential function
+   shapes.
 5. **Direct concurrency** executes 160,000 calls through one generation to
    isolate shared-heap invocation from unloading.
 6. **Unload stress** compiles unique artifacts and runs three child processes:
@@ -41,6 +42,12 @@ The managed suite explicitly proves:
 - a token finalizer cannot retire a terminal call that is still running.
 - retired file mappings disappear and each former interval is covered by an
   anonymous `---p` tombstone.
+
+The unload-safety tests additionally prove that a bottom inside a host-created
+`Dynamic` is not evaluated, while a `[Dynamic]` round-trip through a real plugin
+forces the plugin-created list spine, unloads and unmaps the plugin, and remains
+decodable with `fromDynamic` afterward. A negative GHC compilation also locks
+the custom type error for direct function results.
 
 These tests exist because a smoke call cannot distinguish a safe wrapper from a
 token that the optimiser may finalize independently of a plugin thunk.
@@ -115,3 +122,10 @@ Final managed acceptance on 2026-08-24, same platform:
   and 64 full sequential managed lifecycles;
 - every retired file path disappears from `/proc/self/maps`, and focused
   managed tests assert anonymous `---p` coverage of every retired interval.
+
+`UnloadSafe` acceptance on 2026-08-29, same platform:
+
+- `cabal build all -j1` passes;
+- `cabal test all -j1 --test-show-details=direct` passes all 27 tests in 175.18
+  seconds, including the host-created `Dynamic` unload regression and the
+  100-generation strict and managed stress matrix.

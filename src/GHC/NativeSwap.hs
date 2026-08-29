@@ -8,6 +8,7 @@ module GHC.NativeSwap
   , HotSwap
   , HotSwapError (..)
   , Retirement
+  , UnloadSafe (..)
   , closeDynamic
   , closeHotSwap
   , invoke
@@ -16,6 +17,7 @@ module GHC.NativeSwap
   , snapshotFunction
   , swapDynamic
   , swapHotSwap
+  , forceUnloadSafe
   , waitRetirement
   , withDynamic
   , withHotSwap
@@ -42,7 +44,6 @@ import Control.Concurrent.STM
   , throwSTM
   , writeTVar
   )
-import Control.DeepSeq (NFData, force)
 import Control.Exception
   ( SomeException
   , bracket
@@ -72,6 +73,10 @@ import GHC.NativeSwap.Internal.Native
   , unloadNative
   )
 import GHC.NativeSwap.Plugin (Entry)
+import GHC.NativeSwap.UnloadSafe
+  ( UnloadSafe (..)
+  , forceUnloadSafe
+  )
 import System.Mem (performMajorGC)
 
 data Dynamic value = Dynamic
@@ -133,7 +138,7 @@ withHotSwap
 withHotSwap = withDynamic
 
 invoke
-  :: (NFData output)
+  :: (UnloadSafe output)
   => HotSwap input output
   -> input
   -> IO output
@@ -146,10 +151,10 @@ class DynamicFunction function where
     -> function
     -> function
 
-instance (NFData output) => DynamicFunction (IO output) where
+instance (UnloadSafe output) => DynamicFunction (IO output) where
   wrapDynamicFunction path token action =
     withForeignPtr token $ \_ ->
-      runPluginAction path (action >>= evaluate . force)
+      runPluginAction path (action >>= evaluate . forceUnloadSafe)
 
 instance (DynamicFunction output) => DynamicFunction (input -> output) where
   wrapDynamicFunction path token function input =

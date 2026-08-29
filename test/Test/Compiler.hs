@@ -6,6 +6,7 @@ module Test.Compiler
 
 import Data.Aeson (eitherDecode, encode)
 import Data.ByteString.Lazy qualified as LazyByteString
+import Data.List (isInfixOf)
 import Data.Text qualified as Text
 import GHC.NativeSwap
   ( HotSwap
@@ -15,6 +16,7 @@ import GHC.NativeSwap
   )
 import GHC.NativeSwap.Compiler
   ( CompiledArtifact (compiledPath)
+  , CompilerConfig (..)
   , compileModule
   , validModuleName
   , validSlot
@@ -54,6 +56,8 @@ import Network.HTTP.Types
   )
 import Network.Wai.Handler.Warp (Port, testWithApplication)
 import System.Directory (doesFileExist)
+import System.Exit (ExitCode (..))
+import System.Process (proc, readCreateProcessWithExitCode)
 import Test.Support
   ( invalidSource
   , makeTestCompilerConfig
@@ -73,6 +77,7 @@ compilerTests =
   testGroup
     "compiler"
     [ testCase "validates public names" testNames
+    , testCase "rejects function results at the unload boundary" testFunctionResult
     , testCase "publishes, downloads, and preserves last good revision" testHttpFlow
     , testCase "resolves a qualified invoke closure" testQualifiedResolver
     , testCase "rejects oversized request bodies" testRequestLimit
@@ -87,6 +92,38 @@ testNames = do
   assertBool "generated module is reserved" (not (validModuleName "GHCNativeSwapGenerated"))
   assertBool "lowercase module" (not (validModuleName "plugin"))
   assertBool "empty segment" (not (validModuleName "Plugin..Rules"))
+
+testFunctionResult :: IO ()
+testFunctionResult =
+  withTemporaryDirectory "ghc-native-swap-function-result" $ \root -> do
+    compiler <- makeTestCompilerConfig root
+    let sourcePath = root <> "/FunctionResult.hs"
+        arguments =
+          [ "-v0"
+          , "-fno-code"
+          , "-hide-all-packages"
+          ]
+            <> concatMap (\database -> ["-package-db", database]) (packageDatabases compiler)
+            <> concatMap (\packageId -> ["-package-id", packageId]) (exposedPackages compiler)
+            <> [sourcePath]
+        source =
+          unlines
+            [ "module FunctionResult where"
+            , "import GHC.NativeSwap (forceUnloadSafe)"
+            , "bad :: Int -> Int"
+            , "bad = forceUnloadSafe (+ 1)"
+            ]
+    writeFile sourcePath source
+    (exitCode, standardOutput, standardError) <-
+      readCreateProcessWithExitCode
+        (proc (ghcExecutable compiler) arguments)
+        ""
+    case exitCode of
+      ExitFailure _ ->
+        assertBool
+          (standardOutput <> standardError)
+          ("A function result is not UnloadSafe" `isInfixOf` (standardOutput <> standardError))
+      ExitSuccess -> assertFailure "a function result unexpectedly satisfied UnloadSafe"
 
 testHttpFlow :: IO ()
 testHttpFlow =

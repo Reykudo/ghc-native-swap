@@ -2,17 +2,19 @@
 
 ## Components
 
-The package has two libraries and one executable:
+The package has three libraries and one executable:
 
-1. `ghc-native-swap` owns native generations, invocation leases, managed function
-   snapshots, and retirement.
-2. `ghc-native-swap:compiler` builds artifacts, implements the HTTP protocol, and
-   downloads published revisions.
-3. `ghc-native-swap-compiler` runs compilation as a separate web service.
+1. `ghc-native-swap:unload-safety` defines the small, loader-independent
+   `UnloadSafe` result contract.
+2. `ghc-native-swap` owns native generations, invocation leases, managed
+   function snapshots, and retirement.
+3. `ghc-native-swap:compiler` builds artifacts, implements the HTTP protocol,
+   and downloads published revisions.
+4. `ghc-native-swap-compiler` runs compilation as a separate web service.
 
-The long-lived runtime stays small: `base`, `deepseq`, `directory`, `ghci`, and
-`stm`. Compiler, JSON, HTTP, and process dependencies stay in the compiler
-sublibrary.
+The unload-safety contract has no dependency on the loader or `ghci`; consumers
+that only define boundary values can depend on that public sublibrary. Compiler,
+JSON, HTTP, and process dependencies stay in the compiler sublibrary.
 
 ## Plugin source contract
 
@@ -56,7 +58,7 @@ The original strict API remains the default:
 type HotSwap input output = Dynamic (input -> IO output)
 
 invoke
-  :: NFData output
+  :: UnloadSafe output
   => HotSwap input output
   -> input
   -> IO output
@@ -78,7 +80,7 @@ snapshotFunction
   => Dynamic function
   -> IO function
 
-instance NFData result => DynamicFunction (IO result)
+instance UnloadSafe result => DynamicFunction (IO result)
 instance DynamicFunction rest => DynamicFunction (argument -> rest)
 ```
 
@@ -97,7 +99,17 @@ result <- function 10 "rules"
 The recursive instances create host-owned wrappers for every partial
 application. The same lifetime token is propagated through each wrapper. The
 terminal `IO result` uses `withForeignPtr`, catches synchronous exceptions, and
-forces `result` to normal form while the token is alive.
+runs `rnfUnloadSafe` while the token is alive.
+
+`UnloadSafe` names the actual boundary invariant: after its method returns, the
+value retains no code, info tables, static data, finalizers, or closures owned by
+the reloadable module. Every lawful `NFData` value receives an automatic
+instance. Structural instances for lists, `Maybe`, `Either`, tuples, `Map`,
+`Set`, and `Vector` also permit host-owned opaque leaves. In particular,
+`Data.Dynamic.Dynamic` is checked only to WHNF: its payload must have been
+created by permanently loaded host code and merely transported by the module.
+Direct function results are rejected even though `deepseq` has a deprecated
+shallow `NFData (a -> b)` instance.
 
 ## Compiler pipeline
 
@@ -196,8 +208,9 @@ while a plugin thunk remains reachable.
 `snapshotFunction` does not expose the pair. Every callable closure is a host
 wrapper that needs the token for its eventual terminal `withForeignPtr`, so
 partial applications retain both the plugin continuation and its generation.
-The terminal `NFData` constraint prevents result thunks from crossing the point
-where that protection ends.
+The terminal `UnloadSafe` constraint prevents module-owned result thunks from
+crossing the point where that protection ends while still permitting explicitly
+host-owned opaque values.
 
 ## Concurrency
 

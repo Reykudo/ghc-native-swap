@@ -37,6 +37,7 @@ import Control.Monad
   , void
   , when
   )
+import Data.Dynamic qualified as Haskell
 import Data.Foldable (traverse_)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.List (isInfixOf)
@@ -83,6 +84,8 @@ runNativeChild arguments =
     ["invalid-symbol", valid, missingEntry] ->
       invalidSymbolScenario valid missingEntry
     ["strict-output", lazyOutput] -> strictOutputScenario lazyOutput
+    ["dynamic-output", dynamicOutput] ->
+      dynamicOutputScenario dynamicOutput
     ["snapshot", versionOne, versionTwo] ->
       snapshotScenario versionOne versionTwo
     ["snapshot-in-flight", blocking] ->
@@ -269,6 +272,20 @@ strictOutputScenario lazyOutput = do
     other -> fail ("expected forced plugin exception, got " <> show other)
   closeHotSwap runtime
   assertUnmapped lazyOutput
+
+dynamicOutputScenario :: FilePath -> IO ()
+dynamicOutputScenario artifact = do
+  runtime <-
+    newHotSwap artifact
+      :: IO (HotSwap Haskell.Dynamic [Haskell.Dynamic])
+  output <- invoke runtime (Haskell.toDyn (41 :: Int))
+  closeHotSwap runtime
+  assertUnmapped artifact
+  case output of
+    [value]
+      | Just number <- Haskell.fromDynamic value ->
+          expectEqual "host Dynamic survives unload" (41 :: Int) number
+    _ -> fail "unexpected host Dynamic output"
 
 snapshotScenario :: FilePath -> FilePath -> IO ()
 snapshotScenario versionOne versionTwo = do

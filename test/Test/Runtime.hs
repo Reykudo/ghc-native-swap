@@ -5,8 +5,11 @@ module Test.Runtime
   ( runtimeTests
   ) where
 
+import Control.Exception (SomeException, evaluate, try)
 import Control.Monad (forM)
+import Data.Dynamic qualified as Haskell
 import Data.Text qualified as Text
+import GHC.NativeSwap (forceUnloadSafe)
 import GHC.NativeSwap.Compiler (CompilerConfig)
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.Exit (ExitCode (..))
@@ -31,7 +34,15 @@ runtimeTests :: IO RuntimeFixtures -> TestTree
 runtimeTests getFixtures =
   testGroup
     "runtime subprocesses"
-    [ testCase "loads, swaps, closes, and unmaps" $ do
+    [ testCase "keeps a host Dynamic payload opaque" $ do
+        let dynamic = Haskell.toDyn (error "opaque payload was forced" :: Int)
+        result <-
+          try (evaluate (forceUnloadSafe dynamic))
+            :: IO (Either SomeException Haskell.Dynamic)
+        case result of
+          Right _ -> pure ()
+          Left exception -> assertFailure (show exception)
+    , testCase "loads, swaps, closes, and unmaps" $ do
         fixtures <- getFixtures
         runChild 30 ["basic", fixtureV1 fixtures, fixtureV2 fixtures]
     , testCase "supports sequential loader lifecycles" $ do
@@ -78,6 +89,9 @@ runtimeTests getFixtures =
     , testCase "forces plugin output before releasing lease" $ do
         fixtures <- getFixtures
         runChild 30 ["strict-output", fixtureLazyOutput fixtures]
+    , testCase "detaches a host Dynamic before unload" $ do
+        fixtures <- getFixtures
+        runChild 30 ["dynamic-output", fixtureDynamicOutput fixtures]
     , testCase "snapshot pins its generation until GC" $ do
         fixtures <- getFixtures
         runChild
@@ -98,7 +112,7 @@ runtimeTests getFixtures =
     , testCase "managed partial application pins its generation" $ do
         fixtures <- getFixtures
         runChild 30 ["managed-partial", fixtureMultipleArguments fixtures]
-    , testCase "managed results reach normal form before release" $ do
+    , testCase "managed results satisfy unload safety before release" $ do
         fixtures <- getFixtures
         runChild 30 ["managed-strict-output", fixtureLazyOutput fixtures]
     , testCase "managed values support sequential shapes" $ do

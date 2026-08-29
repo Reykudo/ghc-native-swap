@@ -29,6 +29,12 @@ package allowlist must include `base`, `ghc-native-swap`, and every shared API p
 used by request, response, or implementation code. `GHCNativeSwapGenerated` is
 reserved for the compiler-created ABI module.
 
+`makeCompilerConfig` resolves each allowlist name once to the highest-precedence
+concrete GHC unit ID using the compiler's companion `ghc-pkg`. Compilation then
+uses `-package-id`, which keeps the main library unambiguous when public Cabal
+sublibraries from the same source package are registered in the same package
+database.
+
 The service first builds an executable probe importing this exact binding. A
 missing binding, ambiguous type, unavailable `Typeable` representation, or
 other source error is a normal compilation failure. The probe produces the

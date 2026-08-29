@@ -14,6 +14,7 @@ module GHC.NativeSwap.Compiler
 import Control.Exception (bracket)
 import Data.ByteString qualified as ByteString
 import Data.Char (isAlphaNum, isAscii, isUpper)
+import Data.List (stripPrefix)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
@@ -41,7 +42,7 @@ import System.Directory
   , renameFile
   )
 import System.Exit (ExitCode (..))
-import System.FilePath ((<.>), (</>))
+import System.FilePath (takeDirectory, takeFileName, (<.>), (</>))
 import System.Process
   ( CreateProcess (cwd)
   , proc
@@ -88,6 +89,10 @@ makeCompilerConfig compiler artifactRoot packageDatabasePaths packages timeoutMi
   createDirectoryIfMissing True artifactRoot
   absoluteRoot <- canonicalizePath artifactRoot
   absolutePackageDatabases <- traverse canonicalizePath packageDatabasePaths
+  packageIds <-
+    traverse
+      (resolvePackageId compiler absolutePackageDatabases)
+      packages
   version <- commandOutput compiler ["--numeric-version"]
   target <- commandOutput compiler ["--print-target-platform"]
   pure
@@ -95,7 +100,7 @@ makeCompilerConfig compiler artifactRoot packageDatabasePaths packages timeoutMi
       { ghcExecutable = compiler
       , artifactDirectory = absoluteRoot
       , packageDatabases = absolutePackageDatabases
-      , exposedPackages = packages
+      , exposedPackages = packageIds
       , compileTimeoutMicroseconds = timeoutMicroseconds
       , compilerGhcVersion = version
       , compilerTargetPlatform = target
@@ -143,7 +148,7 @@ compileModule config requestedSlot request
           , buildDirectory
           ]
             <> concatMap (\database -> ["-package-db", database]) (packageDatabases config)
-            <> concatMap (\packageName -> ["-package", packageName]) (exposedPackages config)
+            <> concatMap (\packageId -> ["-package-id", packageId]) (exposedPackages config)
         compilerProcess arguments =
           (proc (ghcExecutable config) arguments) {cwd = Just buildDirectory}
     probeBuild <-
@@ -321,6 +326,32 @@ freshIdentifier requestedSlot = do
 commandOutput :: FilePath -> [String] -> IO Text
 commandOutput command arguments =
   Text.strip . Text.pack <$> readProcess command arguments ""
+
+resolvePackageId :: FilePath -> [FilePath] -> String -> IO String
+resolvePackageId compiler databases packageName = do
+  packageIds <-
+    Text.lines
+      <$> commandOutput
+        (packageManagerFor compiler)
+        ( ["--global", "--user"]
+            <> concatMap (\database -> ["--package-db", database]) databases
+            <> ["field", packageName, "id", "--simple-output"]
+        )
+  case packageIds of
+    packageId : _ -> pure (Text.unpack packageId)
+    [] -> fail ("package has no registered unit ID: " <> packageName)
+
+packageManagerFor :: FilePath -> FilePath
+packageManagerFor compiler =
+  let directory = takeDirectory compiler
+      executable = takeFileName compiler
+      packageManager =
+        case stripPrefix "ghc-" executable of
+          Just version -> "ghc-pkg-" <> version
+          Nothing -> "ghc-pkg"
+  in  if directory == "."
+        then packageManager
+        else directory </> packageManager
 
 truncateDiagnostic :: String -> Text
 truncateDiagnostic = Text.take 65_536 . Text.pack

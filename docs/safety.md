@@ -24,7 +24,7 @@ All of these invariants are required:
    hold a finalizer-backed token through every partial application.
 10. Managed terminal actions use `withForeignPtr`; their finalizer cannot race
     a running call.
-11. Plugin results reach normal form before either kind of call releases its
+11. Plugin results satisfy `UnloadSafe` before either kind of call releases its
     protection.
 12. Synchronous exceptions become a strict host-retained `String` while the
     generation is protected; asynchronous exceptions propagate.
@@ -55,15 +55,38 @@ value separately. Recursive host wrappers carry the token through
 structure such as `Managed token value` is unsafe: `value` may remain reachable
 after `token` becomes dead, especially after demand/liveness optimisation.
 
-`NFData.rnf` is required at the terminal result because WHNF is not enough. A
-list, record, exception message, or other result can contain thunks whose entry
-code, SRT, static data, or captured closures belong to the reloadable module.
-Those thunks must be evaluated or fail while the generation is protected. An
-incorrect or deliberately shallow `NFData` instance violates the contract.
+`UnloadSafe` is the terminal result contract:
 
-Higher-order results are intentionally unsupported: standard function types do
-not have `NFData`, and a plugin closure must not be smuggled through a custom
-container or dishonest instance.
+```haskell
+class UnloadSafe value where
+  rnfUnloadSafe :: value -> ()
+```
+
+After `rnfUnloadSafe` returns, the value must retain no code, info tables,
+static data, finalizers, or closures owned by the reloadable module. This is a
+trusted instance law. It is stronger and more precise than merely reaching
+WHNF, and it is not serialization.
+
+A blanket instance delegates every lawful `NFData` value to `rnf`. This remains
+the normal path: a list, record, exception message, or other result can contain
+thunks whose entry code, SRT, static data, or captured closures belong to the
+reloadable module, and those thunks must evaluate or fail while the generation
+is protected. An incorrect or deliberately shallow `NFData` instance violates
+both the `NFData` and `UnloadSafe` contracts.
+
+`Data.Dynamic.Dynamic` is the deliberate opaque exception. Its instance forces
+only the outer value and is lawful only when permanently loaded host code
+created both the payload and its `TypeRep`. A reloadable module may receive and
+transport that same value, including inside the supplied structural containers,
+but must not call `toDyn` itself. This preserves an opaque host value without
+evaluating its payload and without allowing the module to hide one of its own
+thunks inside the result.
+
+Higher-order results are intentionally unsupported. A dedicated function
+instance produces a compile-time error even though `deepseq` still provides a
+deprecated shallow `NFData (a -> b)` instance. A plugin closure must not be
+smuggled through a custom container, mutable cell, plugin-created `Dynamic`, or
+dishonest instance.
 
 ## GHC native unload defect
 
@@ -118,9 +141,13 @@ values; do not add `-fkeep-cafs`.
 - Define `invoke` as `Entry Request Response` or another curried type ending in
   `IO result`.
 - Do not declare `foreign export` in a reloadable module.
-- Give terminal results correct `NFData` instances; do not return functions,
-  plugin-defined constructors, lazy streams, custom finalizers, or hidden
-  plugin closures.
+- Give terminal results lawful `UnloadSafe` instances. Lawful `NFData` values
+  receive one automatically; records or sums containing `Dynamic` need an
+  explicit structural instance.
+- Pass host-created `Dynamic` values through unchanged. Do not construct one in
+  the reloadable module.
+- Do not return functions, plugin-defined constructors, lazy streams, mutable
+  cells, custom finalizers, or hidden plugin closures.
 - Storing the host wrapper returned by `snapshotFunction` in an `IORef`, `MVar`,
   or `TVar` is supported. Storing a raw plugin closure is not.
 - Do not leave unmanaged threads executing plugin code after a terminal action

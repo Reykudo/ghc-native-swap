@@ -24,7 +24,7 @@ import Control.Concurrent.STM
   , readTVar
   , writeTVar
   )
-import Control.DeepSeq (NFData, force)
+import Control.DeepSeq (force)
 import Control.Exception
   ( SomeAsyncException
   , SomeException
@@ -72,6 +72,7 @@ import GHC.NativeSwap.Internal.ABI
   , invokeSymbolFor
   )
 import GHC.NativeSwap.Plugin (Entry, Export (..))
+import GHC.NativeSwap.UnloadSafe (UnloadSafe, forceUnloadSafe)
 import GHCi.Message (LoadedDLL)
 import GHCi.ObjLink
   ( ShouldRetainCAFs (RetainCAFs)
@@ -157,7 +158,7 @@ loadNative expected requestedPath = do
       `onException` cleanup
 
 invokeNative
-  :: (NFData output)
+  :: (UnloadSafe output)
   => Native (Entry input output)
   -> input
   -> IO output
@@ -165,7 +166,7 @@ invokeNative native input = do
   invoke <- readNative native
   runPluginAction
     (nativePath native)
-    (invoke input >>= evaluate . force)
+    (invoke input >>= evaluate . forceUnloadSafe)
 
 readNative :: Native value -> IO value
 readNative native = do
