@@ -109,9 +109,9 @@ testFunctionResult =
         source =
           unlines
             [ "module FunctionResult where"
-            , "import GHC.NativeSwap (forceUnloadSafe)"
-            , "bad :: Int -> Int"
-            , "bad = forceUnloadSafe (+ 1)"
+            , "import GHC.NativeSwap (HotSwap, invoke)"
+            , "bad :: HotSwap () (Int -> Int) -> IO (Int -> Int)"
+            , "bad runtime = invoke runtime ()"
             ]
     writeFile sourcePath source
     (exitCode, standardOutput, standardError) <-
@@ -122,8 +122,8 @@ testFunctionResult =
       ExitFailure _ ->
         assertBool
           (standardOutput <> standardError)
-          ("A function result is not UnloadSafe" `isInfixOf` (standardOutput <> standardError))
-      ExitSuccess -> assertFailure "a function result unexpectedly satisfied UnloadSafe"
+          ("A function result cannot cross the native unload boundary" `isInfixOf` (standardOutput <> standardError))
+      ExitSuccess -> assertFailure "a function result unexpectedly satisfied the boundary"
 
 testHttpFlow :: IO ()
 testHttpFlow =

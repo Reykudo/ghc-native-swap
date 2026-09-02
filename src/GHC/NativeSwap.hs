@@ -1,5 +1,9 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module GHC.NativeSwap
@@ -7,8 +11,8 @@ module GHC.NativeSwap
   , DynamicFunction
   , HotSwap
   , HotSwapError (..)
+  , NonFunctionResult
   , Retirement
-  , UnloadSafe (..)
   , closeDynamic
   , closeHotSwap
   , invoke
@@ -17,7 +21,6 @@ module GHC.NativeSwap
   , snapshotFunction
   , swapDynamic
   , swapHotSwap
-  , forceUnloadSafe
   , waitRetirement
   , withDynamic
   , withHotSwap
@@ -44,6 +47,7 @@ import Control.Concurrent.STM
   , throwSTM
   , writeTVar
   )
+import Control.DeepSeq (NFData, force)
 import Control.Exception
   ( SomeException
   , bracket
@@ -55,6 +59,7 @@ import Control.Exception
   )
 import Control.Monad (unless, void)
 import Data.Foldable (traverse_)
+import Data.Kind (Constraint, Type)
 import Data.Typeable (Typeable)
 import Foreign.Concurrent qualified as Concurrent
 import Foreign.ForeignPtr (ForeignPtr, withForeignPtr)
@@ -73,10 +78,7 @@ import GHC.NativeSwap.Internal.Native
   , unloadNative
   )
 import GHC.NativeSwap.Plugin (Entry)
-import GHC.NativeSwap.UnloadSafe
-  ( UnloadSafe (..)
-  , forceUnloadSafe
-  )
+import GHC.TypeError (ErrorMessage (..), TypeError)
 import System.Mem (performMajorGC)
 
 data Dynamic value = Dynamic
@@ -138,11 +140,14 @@ withHotSwap
 withHotSwap = withDynamic
 
 invoke
-  :: (UnloadSafe output)
+  :: forall output input
+   . (NFData output, NonFunctionResult output)
   => HotSwap input output
   -> input
   -> IO output
-invoke = invokeWith invokeNative
+invoke runtime input =
+  case nonFunctionResultWitness @output of
+    ConstraintWitness -> invokeWith invokeNative runtime input
 
 class DynamicFunction function where
   wrapDynamicFunction
@@ -151,14 +156,30 @@ class DynamicFunction function where
     -> function
     -> function
 
-instance (UnloadSafe output) => DynamicFunction (IO output) where
+instance (NFData output, NonFunctionResult output) => DynamicFunction (IO output) where
   wrapDynamicFunction path token action =
     withForeignPtr token $ \_ ->
-      runPluginAction path (action >>= evaluate . forceUnloadSafe)
+      runPluginAction path (action >>= evaluate . force)
 
 instance (DynamicFunction output) => DynamicFunction (input -> output) where
   wrapDynamicFunction path token function input =
     wrapDynamicFunction path token (function input)
+
+type NonFunctionResult :: Type -> Constraint
+type family NonFunctionResult result where
+  NonFunctionResult (_argument -> _result) =
+    TypeError
+      ('Text "A function result cannot cross the native unload boundary")
+  NonFunctionResult _result = ()
+
+data ConstraintWitness (constraint :: Constraint) where
+  ConstraintWitness :: (constraint) => ConstraintWitness constraint
+
+nonFunctionResultWitness
+  :: forall result
+   . (NonFunctionResult result)
+  => ConstraintWitness (NonFunctionResult result)
+nonFunctionResultWitness = ConstraintWitness
 
 snapshotFunction
   :: (DynamicFunction function)

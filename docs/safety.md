@@ -24,8 +24,8 @@ All of these invariants are required:
    hold a finalizer-backed token through every partial application.
 10. Managed terminal actions use `withForeignPtr`; their finalizer cannot race
     a running call.
-11. Plugin results satisfy `UnloadSafe` before either kind of call releases its
-    protection.
+11. Plugin results reach the normal form defined by `NFData` before either kind
+    of call releases its protection.
 12. Synchronous exceptions become a strict host-retained `String` while the
     generation is protected; asynchronous exceptions propagate.
 13. Retirement waits for strict leases and managed tokens before freeing the
@@ -55,37 +55,31 @@ value separately. Recursive host wrappers carry the token through
 structure such as `Managed token value` is unsafe: `value` may remain reachable
 after `token` becomes dead, especially after demand/liveness optimisation.
 
-`UnloadSafe` is the terminal result contract:
+`NFData` is the terminal result contract:
 
 ```haskell
-class UnloadSafe value where
-  rnfUnloadSafe :: value -> ()
+class NFData value where
+  rnf :: value -> ()
 ```
 
-After `rnfUnloadSafe` returns, the value must retain no code, info tables,
-static data, finalizers, or closures owned by the reloadable module. This is a
-trusted instance law. It is stronger and more precise than merely reaching
-WHNF, and it is not serialization.
+After `rnf` returns, the value must retain no code, info tables, static data,
+finalizers, or closures owned by the reloadable module. This is a trusted
+instance law and not serialization. A list, record, exception message, or other
+result can contain thunks whose entry code, SRT, static data, or captured
+closures belong to the reloadable module; those thunks must evaluate or fail
+while the generation is protected.
 
-A blanket instance delegates every lawful `NFData` value to `rnf`. This remains
-the normal path: a list, record, exception message, or other result can contain
-thunks whose entry code, SRT, static data, or captured closures belong to the
-reloadable module, and those thunks must evaluate or fail while the generation
-is protected. An incorrect or deliberately shallow `NFData` instance violates
-both the `NFData` and `UnloadSafe` contracts.
+An application may define a deliberately shallow `NFData` instance for a
+dedicated opaque newtype. It is lawful only when permanently loaded host code
+created everything hidden behind the wrapper and reloadable code can merely
+transport it. `ghc-native-swap` does not special-case raw
+`Data.Dynamic.Dynamic`; this keeps the trust decision at the boundary type that
+can enforce the ownership rule.
 
-`Data.Dynamic.Dynamic` is the deliberate opaque exception. Its instance forces
-only the outer value and is lawful only when permanently loaded host code
-created both the payload and its `TypeRep`. A reloadable module may receive and
-transport that same value, including inside the supplied structural containers,
-but must not call `toDyn` itself. This preserves an opaque host value without
-evaluating its payload and without allowing the module to hide one of its own
-thunks inside the result.
-
-Higher-order results are intentionally unsupported. A dedicated function
-instance produces a compile-time error even though `deepseq` still provides a
-deprecated shallow `NFData (a -> b)` instance. A plugin closure must not be
-smuggled through a custom container, mutable cell, plugin-created `Dynamic`, or
+Higher-order results are intentionally unsupported. `NonFunctionResult`
+produces a compile-time error even though `deepseq` still provides a deprecated
+shallow `NFData (a -> b)` instance. A plugin closure must not be smuggled
+through a custom container, mutable cell, plugin-created opaque value, or
 dishonest instance.
 
 ## GHC native unload defect
@@ -141,11 +135,11 @@ values; do not add `-fkeep-cafs`.
 - Define `invoke` as `Entry Request Response` or another curried type ending in
   `IO result`.
 - Do not declare `foreign export` in a reloadable module.
-- Give terminal results lawful `UnloadSafe` instances. Lawful `NFData` values
-  receive one automatically; records or sums containing `Dynamic` need an
-  explicit structural instance.
-- Pass host-created `Dynamic` values through unchanged. Do not construct one in
-  the reloadable module.
+- Give terminal results lawful `NFData` instances; ordinary records and sums
+  should use native deriving.
+- Put host-owned opaque values in dedicated newtypes with shallow `NFData`
+  instances, and do not construct their hidden payloads in the reloadable
+  module.
 - Do not return functions, plugin-defined constructors, lazy streams, mutable
   cells, custom finalizers, or hidden plugin closures.
 - Storing the host wrapper returned by `snapshotFunction` in an `IORef`, `MVar`,

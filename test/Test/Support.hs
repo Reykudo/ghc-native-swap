@@ -63,7 +63,6 @@ data RuntimeFixtures = RuntimeFixtures
   , fixtureWrongType :: !FilePath
   , fixtureMissingEntry :: !FilePath
   , fixtureLazyOutput :: !FilePath
-  , fixtureDynamicOutput :: !FilePath
   , fixtureZeroArgument :: !FilePath
   , fixtureMultipleArguments :: !FilePath
   }
@@ -80,7 +79,6 @@ buildRuntimeFixtures = do
   wrongType <- compileFixture config "wrong-type" wrongTypeSource
   missingEntry <- compileRawFixture config "missing-entry" Nothing
   lazyOutput <- compileFixture config "lazy-output" lazyOutputSource
-  dynamicOutput <- compileFixture config "dynamic-output" dynamicOutputSource
   zeroArgument <- compileFixture config "zero-argument" zeroArgumentSource
   multipleArguments <-
     compileFixture config "multiple-arguments" multipleArgumentsSource
@@ -95,7 +93,6 @@ buildRuntimeFixtures = do
       , fixtureWrongType = wrongType
       , fixtureMissingEntry = missingEntry
       , fixtureLazyOutput = lazyOutput
-      , fixtureDynamicOutput = dynamicOutput
       , fixtureZeroArgument = zeroArgument
       , fixtureMultipleArguments = multipleArguments
       }
@@ -277,16 +274,6 @@ lazyOutputSource =
     , "import GHC.NativeSwap.Plugin (Entry)"
     , "invoke :: Entry Int [Int]"
     , "invoke _ = pure [1, error \"latent plugin thunk\"]"
-    ]
-
-dynamicOutputSource :: Text
-dynamicOutputSource =
-  Text.unlines
-    [ "module Plugin where"
-    , "import Data.Dynamic (Dynamic)"
-    , "import GHC.NativeSwap.Plugin (Entry)"
-    , "invoke :: Entry Dynamic [Dynamic]"
-    , "invoke value = pure [value]"
     ]
 
 zeroArgumentSource :: Text

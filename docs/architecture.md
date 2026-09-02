@@ -2,19 +2,17 @@
 
 ## Components
 
-The package has three libraries and one executable:
+The package has two libraries and one executable:
 
-1. `ghc-native-swap:unload-safety` defines the small, loader-independent
-   `UnloadSafe` result contract.
-2. `ghc-native-swap` owns native generations, invocation leases, managed
+1. `ghc-native-swap` owns native generations, invocation leases, managed
    function snapshots, and retirement.
-3. `ghc-native-swap:compiler` builds artifacts, implements the HTTP protocol,
+2. `ghc-native-swap:compiler` builds artifacts, implements the HTTP protocol,
    and downloads published revisions.
-4. `ghc-native-swap-compiler` runs compilation as a separate web service.
+3. `ghc-native-swap-compiler` runs compilation as a separate web service.
 
-The unload-safety contract has no dependency on the loader or `ghci`; consumers
-that only define boundary values can depend on that public sublibrary. Compiler,
-JSON, HTTP, and process dependencies stay in the compiler sublibrary.
+Boundary values use `Control.DeepSeq.NFData`; no loader-specific value class or
+support sublibrary is required. Compiler, JSON, HTTP, and process dependencies
+stay in the compiler sublibrary.
 
 ## Plugin source contract
 
@@ -58,7 +56,7 @@ The original strict API remains the default:
 type HotSwap input output = Dynamic (input -> IO output)
 
 invoke
-  :: UnloadSafe output
+  :: (NFData output, NonFunctionResult output)
   => HotSwap input output
   -> input
   -> IO output
@@ -80,7 +78,7 @@ snapshotFunction
   => Dynamic function
   -> IO function
 
-instance UnloadSafe result => DynamicFunction (IO result)
+instance (NFData result, NonFunctionResult result) => DynamicFunction (IO result)
 instance DynamicFunction rest => DynamicFunction (argument -> rest)
 ```
 
@@ -99,17 +97,16 @@ result <- function 10 "rules"
 The recursive instances create host-owned wrappers for every partial
 application. The same lifetime token is propagated through each wrapper. The
 terminal `IO result` uses `withForeignPtr`, catches synchronous exceptions, and
-runs `rnfUnloadSafe` while the token is alive.
+runs `rnf` while the token is alive.
 
-`UnloadSafe` names the actual boundary invariant: after its method returns, the
-value retains no code, info tables, static data, finalizers, or closures owned by
-the reloadable module. Every lawful `NFData` value receives an automatic
-instance. Structural instances for lists, `Maybe`, `Either`, tuples, `Map`,
-`Set`, and `Vector` also permit host-owned opaque leaves. In particular,
-`Data.Dynamic.Dynamic` is checked only to WHNF: its payload must have been
-created by permanently loaded host code and merely transported by the module.
-Direct function results are rejected even though `deepseq` has a deprecated
-shallow `NFData (a -> b)` instance.
+The boundary uses the result type's ordinary `NFData` instance. Its law is part
+of the loader contract: after `rnf` returns, the value must retain no code, info
+tables, static data, finalizers, or closures owned by the reloadable module.
+Host API packages can represent an opaque value with a dedicated newtype and a
+deliberately shallow `NFData` instance when permanent host ownership establishes
+that invariant. The loader has no special instance for raw
+`Data.Dynamic.Dynamic`. `NonFunctionResult` rejects direct function results even
+though `deepseq` has a deprecated shallow `NFData (a -> b)` instance.
 
 ## Compiler pipeline
 
@@ -208,9 +205,9 @@ while a plugin thunk remains reachable.
 `snapshotFunction` does not expose the pair. Every callable closure is a host
 wrapper that needs the token for its eventual terminal `withForeignPtr`, so
 partial applications retain both the plugin continuation and its generation.
-The terminal `UnloadSafe` constraint prevents module-owned result thunks from
-crossing the point where that protection ends while still permitting explicitly
-host-owned opaque values.
+Terminal `rnf` prevents module-owned result thunks from crossing the point where
+that protection ends. Explicit host-owned opaque wrappers are responsible for
+their own lawful shallow `NFData` instances.
 
 ## Concurrency
 

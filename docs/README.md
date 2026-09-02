@@ -15,8 +15,8 @@ Current scope:
 - keep the original strict one-call `invoke` API;
 - expose a separate GC-managed snapshot API for zero or arbitrary curried
   arguments ending in `IO`;
-- express the unload boundary with `UnloadSafe`, including host-owned opaque
-  `Data.Dynamic.Dynamic` values;
+- force results through standard `NFData`, with a separate type-level rejection
+  of function results;
 - pass arguments and results directly through the shared Haskell heap, with no
   serialization or per-call stable pointers;
 - use two-phase GC-aware native object retirement;
